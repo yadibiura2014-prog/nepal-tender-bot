@@ -2,6 +2,7 @@ import os
 import requests
 import smtplib
 from email.mime.text import MIMEText
+from datetime import datetime
 
 # Secrets
 API_KEY = os.getenv("GEMINI_API_KEY")
@@ -9,46 +10,43 @@ SENDER = os.getenv("EMAIL_SENDER")
 PASSWORD = os.getenv("EMAIL_PASSWORD")
 
 def run_bot():
-    print("Bot suru bhayo (Ultimate Fix)...")
+    today = datetime.now().strftime("%Y-%m-%d")
+    print(f"Aajako Date: {today} | Tender khojna suru bhayo...")
     
-    # 1. Paila model bhetincha ki nai check garne
-    list_url = f"https://generativelanguage.googleapis.com/v1beta/models?key={API_KEY}"
+    # AI lai Nepal ko tender search garna lagaune target list
+    papers = "Gorkhapatra, Kantipur, The Kathmandu Post, The Rising Nepal, The Himalayan Times, Annapurna Post, Nagarik, Naya Patrika, Karobar Economic Daily, Janakpur today, Chitwan Post, Madhyanha, Aarthik Dainik, Bolpatra Nepal"
+    
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={API_KEY}"
+    
+    prompt = f"""
+    Today's date is {today}. Your task is to find and summarize all new tender notices published today in Nepal from: {papers} and the PPMO Bolpatra website.
+    
+    Please provide the data in a clean Nepali/English Table:
+    1. Organization Name
+    2. Tender Description
+    3. Deadline (Closing Date)
+    4. Source Newspaper/Site
+    
+    If you cannot find specific ones for today, list the most important active tenders from PPMO (Public Procurement Monitoring Office) Nepal.
+    """
+    
+    data = {"contents": [{"parts": [{"text": prompt}]}]}
     
     try:
-        # Paila available models herne
-        get_models = requests.get(list_url)
-        content_to_send = ""
-        
-        if get_models.status_code == 200:
-            models_data = get_models.json()
-            # Sabai bhanda mathillo model line
-            first_model = models_data['models'][0]['name']
-            print(f"Model bhetiyo: {first_model}")
-            
-            # 2. Bhetiyeko model bata content generate garne
-            gen_url = f"https://generativelanguage.googleapis.com/v1beta/{first_model}:generateContent?key={API_KEY}"
-            data = {"contents": [{"parts": [{"text": "Say 'System is online' and give a small tender tip."}]}]}
-            
-            res = requests.post(gen_url, json=data)
-            if res.status_code == 200:
-                content_to_send = res.json()['candidates'][0]['content']['parts'][0]['text']
-            else:
-                content_to_send = f"AI le error diyo: {res.text}"
+        response = requests.post(url, json=data)
+        if response.status_code == 200:
+            content = response.json()['candidates'][0]['content']['parts'][0]['text']
+            send_email(content, today)
+            print("Email success!")
         else:
-            content_to_send = "Google API connection issue, but bot script is running!"
-
-        # 3. Email pathaune (Yo step AI fail bhaye pani chalcha)
-        send_email(content_to_send)
-        print("Email success!")
-
+            send_email(f"AI Search failed today. Please check PPMO site manually. Error: {response.text}", today)
+            
     except Exception as e:
-        print(f"Galti bhayo: {str(e)}")
-        # Error bhaye pani mail pathaune kosis garne
-        send_email(f"Script chalyo tara error aayo: {str(e)}")
+        print(f"Error: {e}")
 
-def send_email(body):
-    msg = MIMEText(body)
-    msg['Subject'] = "Tender Bot - Status Update"
+def send_email(body, date):
+    msg = MIMEText(body, 'plain', 'utf-8')
+    msg['Subject'] = f"Daily Tender Alert Nepal - {date}"
     msg['From'] = SENDER
     msg['To'] = SENDER
 
