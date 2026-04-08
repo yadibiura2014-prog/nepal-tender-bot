@@ -1,8 +1,8 @@
 import os
-from google import genai
-from datetime import datetime
+import requests
 import smtplib
 from email.mime.text import MIMEText
+from datetime import datetime
 
 # Secrets
 API_KEY = os.getenv("GEMINI_API_KEY")
@@ -10,34 +10,45 @@ SENDER = os.getenv("EMAIL_SENDER")
 PASSWORD = os.getenv("EMAIL_PASSWORD")
 
 def run_bot():
-    print("Bot suru bhayo (New SDK)...")
+    print("Bot suru bhayo (Direct API Method)...")
+    
+    # Google API URL (Direct call, SDK chahindaina)
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={API_KEY}"
+    
+    headers = {'Content-Type': 'application/json'}
+    data = {
+        "contents": [{
+            "parts": [{"text": "Say 'The system is finally working perfectly' and give me a 1-sentence tip for finding tenders in Nepal."}]
+        }]
+    }
+
     try:
-        # Naya SDK use gareko
-        client = genai.Client(api_key=API_KEY)
+        # API lai request pathaune
+        response = requests.post(url, headers=headers, json=data)
         
-        # AI content generate garne
-        response = client.models.generate_content(
-            model="gemini-1.5-flash", 
-            contents="Say 'Bot is finally working' and tell me one tender tip for Nepal."
-        )
-        
-        content = response.text
-        print("AI Content: " + content)
-        
-        # Email pathaune
-        send_email(content)
-        print("Email successfully sent!")
-        
+        if response.status_code == 200:
+            result = response.json()
+            content = result['candidates'][0]['content']['parts'][0]['text']
+            print("AI Response: " + content)
+            
+            # Email pathaune
+            send_email(content)
+            print("Email successfully sent!")
+        else:
+            print(f"API Error: {response.status_code} - {response.text}")
+            
     except Exception as e:
         print(f"Error bhayo: {str(e)}")
 
 def send_email(content):
     msg = MIMEText(content)
-    msg['Subject'] = "Tender Bot - Status OK"
+    msg['Subject'] = "Tender Bot - 100% Success"
     msg['From'] = SENDER
     msg['To'] = SENDER
 
-    with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
+    # Port 587 is most stable for GitHub
+    with smtplib.SMTP('smtp.gmail.com', 587) as server:
+        server.starttls() # Security
         server.login(SENDER, PASSWORD)
         server.sendmail(SENDER, SENDER, msg.as_string())
 
