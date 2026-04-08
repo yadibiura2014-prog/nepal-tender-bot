@@ -9,45 +9,46 @@ SENDER = os.getenv("EMAIL_SENDER")
 PASSWORD = os.getenv("EMAIL_PASSWORD")
 
 def run_bot():
-    print("Bot suru bhayo (Stable API Method)...")
+    print("Bot suru bhayo (Ultimate Fix)...")
     
-    # Model ko naam 'gemini-pro' ma change gareko ani version 'v1' banako
-    # Yo sabai vanda stable URL ho
-    url = f"https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent?key={API_KEY}"
+    # 1. Paila model bhetincha ki nai check garne
+    list_url = f"https://generativelanguage.googleapis.com/v1beta/models?key={API_KEY}"
     
-    headers = {'Content-Type': 'application/json'}
-    data = {
-        "contents": [{
-            "parts": [{"text": "Say 'The bot is finally working!' and give me one motivation for today."}]
-        }]
-    }
-
     try:
-        response = requests.post(url, headers=headers, json=data)
+        # Paila available models herne
+        get_models = requests.get(list_url)
+        content_to_send = ""
         
-        # Yadi 'gemini-pro' le pani 404 diyo bhane 'gemini-1.5-flash' try garne logic
-        if response.status_code == 404:
-            print("gemini-pro bhetena, flash try gardai...")
-            url = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={API_KEY}"
-            response = requests.post(url, headers=headers, json=data)
-
-        if response.status_code == 200:
-            result = response.json()
-            content = result['candidates'][0]['content']['parts'][0]['text']
-            print("AI Response: " + content)
+        if get_models.status_code == 200:
+            models_data = get_models.json()
+            # Sabai bhanda mathillo model line
+            first_model = models_data['models'][0]['name']
+            print(f"Model bhetiyo: {first_model}")
             
-            # Email pathaune
-            send_email(content)
-            print("Email successfully sent!")
+            # 2. Bhetiyeko model bata content generate garne
+            gen_url = f"https://generativelanguage.googleapis.com/v1beta/{first_model}:generateContent?key={API_KEY}"
+            data = {"contents": [{"parts": [{"text": "Say 'System is online' and give a small tender tip."}]}]}
+            
+            res = requests.post(gen_url, json=data)
+            if res.status_code == 200:
+                content_to_send = res.json()['candidates'][0]['content']['parts'][0]['text']
+            else:
+                content_to_send = f"AI le error diyo: {res.text}"
         else:
-            print(f"API Error: {response.status_code} - {response.text}")
-            
-    except Exception as e:
-        print(f"Error bhayo: {str(e)}")
+            content_to_send = "Google API connection issue, but bot script is running!"
 
-def send_email(content):
-    msg = MIMEText(content)
-    msg['Subject'] = "Tender Bot - Status OK"
+        # 3. Email pathaune (Yo step AI fail bhaye pani chalcha)
+        send_email(content_to_send)
+        print("Email success!")
+
+    except Exception as e:
+        print(f"Galti bhayo: {str(e)}")
+        # Error bhaye pani mail pathaune kosis garne
+        send_email(f"Script chalyo tara error aayo: {str(e)}")
+
+def send_email(body):
+    msg = MIMEText(body)
+    msg['Subject'] = "Tender Bot - Status Update"
     msg['From'] = SENDER
     msg['To'] = SENDER
 
