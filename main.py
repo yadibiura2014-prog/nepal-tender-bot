@@ -12,34 +12,33 @@ PASSWORD = os.getenv("EMAIL_PASSWORD")
 def run_bot():
     print("Bot suru bhayo...")
     try:
-        # API Setup
         genai.configure(api_key=API_KEY)
         
-        # Model ko naam simple rakheko (error hatauna)
-        model = genai.GenerativeModel('gemini-1.5-flash') 
-        
-        # AI lai test reply garna lagaune
-        response = model.generate_content("Say 'Bot is Working' and tell me 1 fun fact about Nepal.")
+        # Flash model try garne, bhetene bhane Pro try garne
+        try:
+            model = genai.GenerativeModel('gemini-1.5-flash')
+            response = model.generate_content("Say 'System Online'")
+        except:
+            model = genai.GenerativeModel('gemini-pro')
+            response = model.generate_content("Say 'System Online'")
+            
         content = response.text
-        
         print("AI Content: " + content)
         
-        # Email pathaune
-        send_email(content)
+        # Email function
+        msg = MIMEText(f"Bot working fine. AI says: {content}")
+        msg['Subject'] = "Tender Bot - Status OK"
+        msg['From'] = SENDER
+        msg['To'] = SENDER
+
+        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
+            server.login(SENDER, PASSWORD)
+            server.sendmail(SENDER, SENDER, msg.as_string())
+        
         print("Email successfully sent!")
         
     except Exception as e:
         print(f"Error bhayo: {str(e)}")
-
-def send_email(content):
-    msg = MIMEText(content)
-    msg['Subject'] = "Tender Bot - Setup Successful"
-    msg['From'] = SENDER
-    msg['To'] = SENDER
-
-    with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
-        server.login(SENDER, PASSWORD)
-        server.sendmail(SENDER, SENDER, msg.as_string())
 
 if __name__ == "__main__":
     run_bot()
