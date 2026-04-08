@@ -1,8 +1,6 @@
 name: Daily Tender Bot
 on:
-  schedule:
-    - cron: '0 2 * * *' # Nepal ko bihano approx 7:45 tira aafai chalcha
-  workflow_dispatch: # Manual test garna ko lagi button banaucha
+  workflow_dispatch: # Aile manual test ko lagi matrai
 
 jobs:
   build:
@@ -11,14 +9,14 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
 
-      - name: Set up Python
+      - name: Set up Python 3.10
         uses: actions/setup-python@v2
         with:
-          python-version: '3.9'
+          python-version: '3.10' # Python version badhayeko
 
-      - name: Install dependencies
+      - name: Install latest dependencies
         run: |
-          pip install google-generativeai requests
+          pip install --upgrade google-generativeai requests # Upgrade thapeko
 
       - name: Run tender bot
         env:
