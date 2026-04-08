@@ -15,10 +15,11 @@ def run_bot():
         # API Setup
         genai.configure(api_key=API_KEY)
         
-        # Model change gareko (1.5-flash ko sato gemini-pro try garau error hatana)
-        model = genai.GenerativeModel('gemini-1.5-flash-latest') 
+        # Model ko naam simple rakheko (error hatauna)
+        model = genai.GenerativeModel('gemini-1.5-flash') 
         
-        response = model.generate_content("Say 'Bot is Working' and give a 1-sentence tender tip.")
+        # AI lai test reply garna lagaune
+        response = model.generate_content("Say 'Bot is Working' and tell me 1 fun fact about Nepal.")
         content = response.text
         
         print("AI Content: " + content)
@@ -32,7 +33,7 @@ def run_bot():
 
 def send_email(content):
     msg = MIMEText(content)
-    msg['Subject'] = "Tender Bot - Status OK"
+    msg['Subject'] = "Tender Bot - Setup Successful"
     msg['From'] = SENDER
     msg['To'] = SENDER
 
@@ -42,4 +43,3 @@ def send_email(content):
 
 if __name__ == "__main__":
     run_bot()
-    
