@@ -1,38 +1,50 @@
 import os
+import requests
 import google.generativeai as genai
 from datetime import datetime
 import smtplib
 from email.mime.text import MIMEText
 
-# Secrets haru read garne
+# Secrets
 API_KEY = os.getenv("GEMINI_API_KEY")
 SENDER = os.getenv("EMAIL_SENDER")
 PASSWORD = os.getenv("EMAIL_PASSWORD")
 
 def run_bot():
-    # Gemini AI setup
     genai.configure(api_key=API_KEY)
     model = genai.GenerativeModel('gemini-1.5-flash')
     
-    # AI lai instructions (Prompt)
-    # Suru ma hami AI lai testing ko lagi normal request garchau
+    # Aajako Date
     today = datetime.now().strftime("%Y-%m-%d")
-    prompt = f"Today's date is {today}. Act as a Tender expert in Nepal. Please provide a short guide on where to find tenders in Nepal and say 'The bot is working!'"
+    
+    # AI lai Newspaper haru check garna lagaune
+    # Note: Yo AI ko knowledge base ma adharit hunchha. 
+    # Aglo step ma hami direct PDF download garne code thapnechau.
+    prompt = f"""
+    Today's date is {today}. Act as a Nepali Tender Analyst.
+    Your task is to find and list all government and private tenders 
+    published in today's major Nepali newspapers (Gorkhapatra, Kantipur, etc.).
+    
+    Provide the information in a table format:
+    1. Organization Name
+    2. Work Description (What is the tender for?)
+    3. Deadline (Closing Date)
+    4. Source (Newspaper Name)
+    
+    If you don't have access to live data, please list the links of 
+    today's e-papers for the user to check manually.
+    """
     
     try:
         response = model.generate_content(prompt)
-        content = response.text
-        
-        # Email pathaune
-        send_email(content)
-        print("Bot successfully ran and email sent!")
-        
+        send_email(response.text)
+        print("Bot successfully ran!")
     except Exception as e:
-        print(f"Error bhayo: {e}")
+        print(f"Error: {e}")
 
 def send_email(content):
     msg = MIMEText(content)
-    msg['Subject'] = f"Tender Bot Test - {datetime.now().strftime('%Y-%m-%d')}"
+    msg['Subject'] = f"Daily Tender Report - {datetime.now().strftime('%Y-%m-%d')}"
     msg['From'] = SENDER
     msg['To'] = SENDER
 
