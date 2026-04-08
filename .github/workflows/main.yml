@@ -1,22 +1,24 @@
 name: Daily Tender Bot
 on:
-  workflow_dispatch: # Aile manual test ko lagi matrai
+  workflow_dispatch: 
+  schedule:
+    - cron: '0 2 * * *'
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
-      - name: Set up Python 3.10
-        uses: actions/setup-python@v2
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v4
         with:
-          python-version: '3.10' # Python version badhayeko
+          python-version: '3.11'
 
-      - name: Install latest dependencies
+      - name: Install dependencies
         run: |
-          pip install --upgrade google-generativeai requests # Upgrade thapeko
+          pip install --upgrade google-generativeai
 
       - name: Run tender bot
         env:
