@@ -1,6 +1,7 @@
 import os
 import requests
 import smtplib
+import time
 from email.mime.text import MIMEText
 from datetime import datetime
 
@@ -11,42 +12,46 @@ PASSWORD = os.getenv("EMAIL_PASSWORD")
 
 def run_bot():
     today = datetime.now().strftime("%Y-%m-%d")
-    print(f"Aajako Date: {today} | Tender khojna suru bhayo...")
-    
-    # AI lai Nepal ko tender search garna lagaune target list
-    papers = "Gorkhapatra, Kantipur, The Kathmandu Post, The Rising Nepal, The Himalayan Times, Annapurna Post, Nagarik, Naya Patrika, Karobar Economic Daily, Janakpur today, Chitwan Post, Madhyanha, Aarthik Dainik, Bolpatra Nepal"
+    print(f"Bot started for {today}")
     
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={API_KEY}"
     
     prompt = f"""
-    Today's date is {today}. Your task is to find and summarize all new tender notices published today in Nepal from: {papers} and the PPMO Bolpatra website.
+    Today's date is {today}. Act as a Nepal Tender Expert. 
+    Task: Find all new tender notices published today in Nepal from:
+    1. PPMO Bolpatra website (bolpatra.gov.np)
+    2. Gorkhapatra and Kantipur Newspapers.
     
-    Please provide the data in a clean Nepali/English Table:
-    1. Organization Name
-    2. Tender Description
-    3. Deadline (Closing Date)
-    4. Source Newspaper/Site
+    Please provide a detailed list in a table:
+    | Organization | Description of Work | Deadline | Source |
     
-    If you cannot find specific ones for today, list the most important active tenders from PPMO (Public Procurement Monitoring Office) Nepal.
+    Important: If you cannot find live data for today, provide the most recent 10 active tenders from bolpatra.gov.np for construction and consulting works.
     """
     
     data = {"contents": [{"parts": [{"text": prompt}]}]}
-    
-    try:
-        response = requests.post(url, json=data)
-        if response.status_code == 200:
-            content = response.json()['candidates'][0]['content']['parts'][0]['text']
-            send_email(content, today)
-            print("Email success!")
-        else:
-            send_email(f"AI Search failed today. Please check PPMO site manually. Error: {response.text}", today)
-            
-    except Exception as e:
-        print(f"Error: {e}")
+
+    # Retry logic: Error aayo bhane 3 choti samma try garne
+    for i in range(3):
+        try:
+            response = requests.post(url, json=data)
+            if response.status_code == 200:
+                content = response.json()['candidates'][0]['content']['parts'][0]['text']
+                send_email(content, today)
+                print("SUCCESS: Email sent.")
+                return 
+            elif response.status_code == 503:
+                print(f"Server busy (503), retrying in 30 seconds... (Attempt {i+1})")
+                time.sleep(30)
+            else:
+                print(f"API Error: {response.status_code}")
+                break
+        except Exception as e:
+            print(f"Error: {e}")
+            break
 
 def send_email(body, date):
     msg = MIMEText(body, 'plain', 'utf-8')
-    msg['Subject'] = f"Daily Tender Alert Nepal - {date}"
+    msg['Subject'] = f"Nepal Tender Report - {date}"
     msg['From'] = SENDER
     msg['To'] = SENDER
 
