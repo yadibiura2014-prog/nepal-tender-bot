@@ -17,21 +17,21 @@ def run_bot():
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={API_KEY}"
     
     prompt = f"""
-    Today's date is {today}. Act as a Nepal Tender Expert. 
-    Task: Find all new tender notices published today in Nepal from:
+    Today's date is {today}. Your task is to act as a Nepal Tender Expert. 
+    Find and list all new tender notices published today in Nepal from:
     1. PPMO Bolpatra website (bolpatra.gov.np)
     2. Gorkhapatra and Kantipur Newspapers.
     
-    Please provide a detailed list in a table:
-    | Organization | Description of Work | Deadline | Source |
+    Provide the data in a table:
+    | Organization | Tender Description | Deadline | Source |
     
-    Important: If you cannot find live data for today, provide the most recent 10 active tenders from bolpatra.gov.np for construction and consulting works.
+    If you cannot find live data for today, list 10 most recent active tenders from bolpatra.gov.np.
     """
     
     data = {"contents": [{"parts": [{"text": prompt}]}]}
 
-    # Retry logic: Error aayo bhane 3 choti samma try garne
-    for i in range(3):
+    # ५०३ एरर आएमा ५ पटक सम्म कोसिस गर्ने
+    for attempt in range(5):
         try:
             response = requests.post(url, json=data)
             if response.status_code == 200:
@@ -40,8 +40,8 @@ def run_bot():
                 print("SUCCESS: Email sent.")
                 return 
             elif response.status_code == 503:
-                print(f"Server busy (503), retrying in 30 seconds... (Attempt {i+1})")
-                time.sleep(30)
+                print(f"Server busy (503). Retrying in 60 seconds... (Attempt {attempt + 1})")
+                time.sleep(60) # १ मिनेट पर्खिने
             else:
                 print(f"API Error: {response.status_code}")
                 break
