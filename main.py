@@ -13,44 +13,45 @@ def run_bot():
     today = datetime.now().strftime("%Y-%m-%d")
     print(f"Bot started for {today}...")
     
-    prompt = f"Today is {today}. Find and list 5-10 new tender notices from Nepal PPMO (bolpatra.gov.np) and newspapers. Provide details in a table."
-    data = {"contents": [{"parts": [{"text": prompt}]}]}
+    # १. तपाईँको की (Key) मा कुन मोडेल चल्छ भनेर खोज्ने
+    list_url = f"https://generativelanguage.googleapis.com/v1beta/models?key={API_KEY}"
+    
+    try:
+        response = requests.get(list_url)
+        if response.status_code != 200:
+            send_email(f"API Key Error: {response.text}", today)
+            return
 
-    # गुगलको ३ वटा फरक ठेगाना (URLs) हरू - एउटा न एउटाले पक्का काम गर्छ
-    urls = [
-        f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={API_KEY}",
-        f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={API_KEY}",
-        f"https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent?key={API_KEY}"
-    ]
+        models_data = response.json()
+        available_models = [m['name'] for m in models_data.get('models', []) if 'generateContent' in m.get('supportedGenerationMethods', [])]
+        
+        if not available_models:
+            send_email("तपाईँको API Key मा कुनै पनि मोडेल भेटिएन। कृपया नयाँ Key निकाल्नुहोस्।", today)
+            return
 
-    content = ""
-    success = False
+        # उपलब्ध मध्ये पहिलो मोडेल प्रयोग गर्ने (जस्तै gemini-1.5-flash वा gemini-pro)
+        chosen_model = available_models[0]
+        print(f"Using model: {chosen_model}")
 
-    for url in urls:
-        try:
-            print(f"Trying URL: {url.split('models/')[1].split(':')[0]}")
-            response = requests.post(url, json=data)
-            if response.status_code == 200:
-                result = response.json()
-                content = result['candidates'][0]['content']['parts'][0]['text']
-                success = True
-                print("SUCCESS: Data found!")
-                break
-            else:
-                print(f"Failed with status: {response.status_code}")
-        except Exception as e:
-            print(f"Error on this URL: {e}")
-            continue
+        # २. टेन्डर खोज्ने काम सुरु गर्ने
+        gen_url = f"https://generativelanguage.googleapis.com/v1beta/{chosen_model}:generateContent?key={API_KEY}"
+        prompt = f"Today is {today}. Find 5-10 active tenders in Nepal from bolpatra.gov.np and newspapers. List them in a table."
+        data = {"contents": [{"parts": [{"text": prompt}]}]}
 
-    if not success:
-        content = "AI model error (404). Please check your Gemini API key permissions or try again later. For now, please check bolpatra.gov.np manually."
+        res = requests.post(gen_url, json=data)
+        if res.status_code == 200:
+            content = res.json()['candidates'][0]['content']['parts'][0]['text']
+            send_email(content, today)
+            print("Email sent successfully with data!")
+        else:
+            send_email(f"Model error: {res.text}", today)
 
-    # ईमेल पठाउने
-    send_email(content, today)
+    except Exception as e:
+        send_email(f"Script error: {str(e)}", today)
 
 def send_email(body, date):
     msg = MIMEText(body, 'plain', 'utf-8')
-    msg['Subject'] = f"Nepal Tender Alert - {date}"
+    msg['Subject'] = f"Nepal Tender Report - {date}"
     msg['From'] = SENDER
     msg['To'] = SENDER
 
@@ -59,7 +60,6 @@ def send_email(body, date):
     server.login(SENDER, PASSWORD)
     server.sendmail(SENDER, SENDER, msg.as_string())
     server.quit()
-    print("Email sent.")
 
 if __name__ == "__main__":
     run_bot()
