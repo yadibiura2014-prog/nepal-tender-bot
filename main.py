@@ -14,52 +14,53 @@ def run_bot():
     today = datetime.now().strftime("%Y-%m-%d")
     print(f"--- Process Started for {today} ---")
     
-    combined_data = ""
-
-    # १. पत्रिकाको डाटा तान्ने
+    # १. कुन मोडेल उपलब्ध छ भनेर गुगललाई सोध्ने (Model Discovery)
+    list_url = f"https://generativelanguage.googleapis.com/v1beta/models?key={API_KEY}"
+    
     try:
+        model_res = requests.get(list_url)
+        if model_res.status_code != 200:
+            send_email(f"API Key Error: {model_res.text}", today)
+            return
+
+        models_list = model_res.json().get('models', [])
+        # 'generateContent' सपोर्ट गर्ने मोडेल छान्ने
+        usable_models = [m['name'] for m in models_list if 'generateContent' in m.get('supportedGenerationMethods', [])]
+        
+        if not usable_models:
+            send_email("तपाईँको API Key मा कुनै पनि मोडेल भेटिएन।", today)
+            return
+
+        # उपलब्ध मध्ये सबैभन्दा राम्रो मोडेल रोज्ने (Priority: Flash 1.5 > Pro)
+        chosen_model = usable_models[0]
+        for m in usable_models:
+            if 'gemini-1.5-flash' in m:
+                chosen_model = m
+                break
+        
+        print(f"Using Model: {chosen_model}")
+
+        # २. पत्रिकाको डाटा तान्ने
         headers = {'User-Agent': 'Mozilla/5.0'}
         news_res = requests.get("https://tendernotice.com.np/", headers=headers, timeout=20)
         soup = BeautifulSoup(news_res.text, 'html.parser')
-        # अनावश्यक स्पेस हटाएर डाटा सफा गर्ने
-        text = ' '.join(soup.get_text().split())
-        combined_data = text[:15000] # १५ हजार अक्षर मात्र लिने
-        print("Successfully fetched newspaper data.")
-    except Exception as e:
-        print(f"Newspaper fetch error: {e}")
+        combined_data = ' '.join(soup.get_text().split())[:15000]
 
-    # २. एआईलाई कमान्ड दिने (Stable v1 URL प्रयोग गरेर)
-    # v1beta को साटो v1 प्रयोग गरिएको छ ताकी ४०४ एरर नआओस्
-    url = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={API_KEY}"
-    
-    prompt = f"Today is {today}. From the following text of Nepal newspapers, extract all tender notices in a clean table with columns: Organization, Description, Deadline, and Source Newspaper. Data: {combined_data}"
-    
-    payload = {
-        "contents": [{"parts": [{"text": prompt}]}]
-    }
-
-    try:
-        print("Calling Gemini AI (v1)...")
-        response = requests.post(url, json=payload, timeout=30)
+        # ३. छानिएको मोडेल प्रयोग गरेर एआईलाई बोलाउने
+        gen_url = f"https://generativelanguage.googleapis.com/v1beta/{chosen_model}:generateContent?key={API_KEY}"
+        prompt = f"Today is {today}. Extract all tender notices from this Nepal newspaper text into a clean table (Organization, Description, Deadline, Source). Text: {combined_data}"
         
-        # यदि v1 ले काम गरेन भने v1beta कोसिस गर्ने (Back-up)
-        if response.status_code == 404:
-            print("v1 failed, trying v1beta...")
-            url_beta = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={API_KEY}"
-            response = requests.post(url_beta, json=payload, timeout=30)
-
+        response = requests.post(gen_url, json={"contents": [{"parts": [{"text": prompt}]}]})
+        
         if response.status_code == 200:
-            result = response.json()
-            content = result['candidates'][0]['content']['parts'][0]['text']
-            print("AI response received successfully.")
+            content = response.json()['candidates'][0]['content']['parts'][0]['text']
             send_email(content, today)
         else:
-            error_msg = f"AI Error: {response.status_code} - {response.text}"
-            print(error_msg)
-            send_email(error_msg, today)
-            
+            send_email(f"AI Generation Error: {response.text}", today)
+
     except Exception as e:
         print(f"Critical Error: {e}")
+        send_email(f"Script Error: {str(e)}", today)
 
 def send_email(body, date):
     try:
@@ -67,15 +68,14 @@ def send_email(body, date):
         msg['Subject'] = f"Nepal Tender Report - {date}"
         msg['From'] = SENDER
         msg['To'] = SENDER
-
         server = smtplib.SMTP('smtp.gmail.com', 587)
         server.starttls()
         server.login(SENDER, PASSWORD)
         server.sendmail(SENDER, SENDER, msg.as_string())
         server.quit()
-        print("!!! EMAIL SENT SUCCESSFULLY !!!")
+        print("!!! EMAIL SENT !!!")
     except Exception as e:
-        print(f"!!! EMAIL FAILED: {str(e)} !!!")
+        print(f"!!! MAIL FAIL: {e} !!!")
 
 if __name__ == "__main__":
     run_bot()
