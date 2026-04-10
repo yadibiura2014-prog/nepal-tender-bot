@@ -1,6 +1,7 @@
 import os
 import requests
 import smtplib
+import time
 from email.mime.text import MIMEText
 from datetime import datetime
 
@@ -13,10 +14,9 @@ def run_bot():
     today = datetime.now().strftime("%Y-%m-%d")
     print(f"Bot started for {today}...")
     
-    # १. तपाईँको की (Key) मा कुन मोडेल चल्छ भनेर खोज्ने
-    list_url = f"https://generativelanguage.googleapis.com/v1beta/models?key={API_KEY}"
-    
     try:
+        # १. उपलब्ध मोडेल खोज्ने
+        list_url = f"https://generativelanguage.googleapis.com/v1beta/models?key={API_KEY}"
         response = requests.get(list_url)
         if response.status_code != 200:
             send_email(f"API Key Error: {response.text}", today)
@@ -26,25 +26,31 @@ def run_bot():
         available_models = [m['name'] for m in models_data.get('models', []) if 'generateContent' in m.get('supportedGenerationMethods', [])]
         
         if not available_models:
-            send_email("तपाईँको API Key मा कुनै पनि मोडेल भेटिएन। कृपया नयाँ Key निकाल्नुहोस्।", today)
+            send_email("No models found for this API Key.", today)
             return
 
-        # उपलब्ध मध्ये पहिलो मोडेल प्रयोग गर्ने (जस्तै gemini-1.5-flash वा gemini-pro)
         chosen_model = available_models[0]
-        print(f"Using model: {chosen_model}")
-
-        # २. टेन्डर खोज्ने काम सुरु गर्ने
         gen_url = f"https://generativelanguage.googleapis.com/v1beta/{chosen_model}:generateContent?key={API_KEY}"
-        prompt = f"Today is {today}. Find 5-10 active tenders in Nepal from bolpatra.gov.np and newspapers. List them in a table."
+        prompt = f"Today is {today}. List 10 active tenders in Nepal from bolpatra.gov.np and newspapers in a clean table."
         data = {"contents": [{"parts": [{"text": prompt}]}]}
 
-        res = requests.post(gen_url, json=data)
-        if res.status_code == 200:
-            content = res.json()['candidates'][0]['content']['parts'][0]['text']
-            send_email(content, today)
-            print("Email sent successfully with data!")
-        else:
-            send_email(f"Model error: {res.text}", today)
+        # २. ५०३ एरर आएमा ५ पटकसम्म कोसिस गर्ने (Retry Logic)
+        content = ""
+        for attempt in range(5):
+            res = requests.post(gen_url, json=data)
+            if res.status_code == 200:
+                content = res.json()['candidates'][0]['content']['parts'][0]['text']
+                send_email(content, today)
+                print("SUCCESS: Email sent!")
+                return
+            elif res.status_code == 503:
+                print(f"Server busy (503). Retrying in 60s... (Attempt {attempt+1})")
+                time.sleep(60) # १ मिनेट पर्खिने
+            else:
+                content = f"Model error: {res.text}"
+                break
+        
+        send_email(content, today)
 
     except Exception as e:
         send_email(f"Script error: {str(e)}", today)
@@ -54,7 +60,6 @@ def send_email(body, date):
     msg['Subject'] = f"Nepal Tender Report - {date}"
     msg['From'] = SENDER
     msg['To'] = SENDER
-
     server = smtplib.SMTP('smtp.gmail.com', 587)
     server.starttls()
     server.login(SENDER, PASSWORD)
