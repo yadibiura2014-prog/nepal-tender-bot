@@ -108,3 +108,19 @@ async def run_automated_bulletin():
 def send_video_email(filepath, date):
     msg = MIMEMultipart()
     msg['From'] = SENDER
+    msg['To'] = SENDER
+    msg['Subject'] = f"Economics Daily Bulletin - {date}"
+    with open(filepath, "rb") as f:
+        part = MIMEBase('application', 'octet-stream')
+        part.set_payload(f.read())
+        encoders.encode_base64(part)
+        part.add_header('Content-Disposition', f"attachment; filename= {filepath}")
+        msg.attach(part)
+    server = smtplib.SMTP('smtp.gmail.com', 587)
+    server.starttls()
+    server.login(SENDER, PASSWORD)
+    server.sendmail(SENDER, SENDER, msg.as_string())
+    server.quit()
+
+if __name__ == "__main__":
+    asyncio.run(run_automated_bulletin())
