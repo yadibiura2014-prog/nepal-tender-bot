@@ -1,0 +1,27 @@
+name: Daily Economics Video
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '15 12 * * *' # नेपालको साँझ ६:०० बजे
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      - name: Install Tools
+        run: |
+          sudo apt update
+          sudo apt install ffmpeg -y
+          pip install moviepy==1.0.3 requests beautifulsoup4 edge-tts pillow
+      - name: Run Video Bot
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          PEXELS_KEY: ${{ secrets.PEXELS_KEY }}
+          EMAIL_SENDER: ${{ secrets.EMAIL_SENDER }}
+          EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
+        run: python economics_video.py
