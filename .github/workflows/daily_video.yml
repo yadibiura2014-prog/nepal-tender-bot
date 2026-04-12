@@ -17,7 +17,8 @@ jobs:
         run: |
           sudo apt update
           sudo apt install ffmpeg -y
-          pip install moviepy==1.0.3 requests beautifulsoup4 edge-tts pillow
+          pip install requests beautifulsoup4 edge-tts
+          pip install Pillow==9.5.0 moviepy==1.0.3
       - name: Run Video Bot
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
