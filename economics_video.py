@@ -21,9 +21,9 @@ PASSWORD = os.getenv("EMAIL_PASSWORD")
 
 async def run_automated_bulletin():
     today = datetime.now().strftime("%Y-%m-%d")
-    print(f"🚀 Pure Economics Bulletin Process Started for {today}...")
+    print(f"🚀 Economics Bulletin Started for {today}...")
 
-    # १. न्युज संकलन (Focus on Business/Economy sections only)
+    # १. न्युज संकलन (Focus on Business/Economy)
     combined_news = []
     sources = [
         "https://ekantipur.com/business", "https://kathmandupost.com/money",
@@ -46,22 +46,24 @@ async def run_automated_bulletin():
 
     news_data = "\n".join(list(set(combined_news)))
 
-    # २. एआई विश्लेषण (Strict Economics + Factual + Numbered Format)
+    # २. एआई विश्लेषण (Ranking & Importance Logic)
     prompt = f"""
-    तिमी एक प्रतिष्ठित PhD Economic Analyst हौ। आजको १३ वटा मुख्य 'आर्थिक समाचार' (Economics News) मात्र छान। 
+    तिमी एक प्रतिष्ठित PhD Economic Analyst हौ। आजको १३ मुख्य 'आर्थिक समाचार' छान। 
+    
     नियमहरू:
-    १. राजनीतिक वा अन्य समाचार पूर्णतया निषेध छ। मात्र बैंक, सेयर, व्यापार र बजेट जस्ता आर्थिक विषय छान।
-    २. हरेक समाचारमा अङ्क वा तथ्याङ्क (Data/Numbers) अनिवार्य हुनुपर्छ।
-    ३. स्क्रिप्टको ढाँचा: "[नम्बर] . . . [हेडलाइन] . . . [१-२ वाक्यको तथ्यगत थप जानकारी]"।
-    ४. बोल्दा नेचुरल सुनियोस् भन्नका लागि सही ठाउँमा अल्पविराम (,) र पूर्णविराम (.) को प्रयोग गर।
+    १. प्राथमिकता (Priority): सबैभन्दा महत्वपूर्ण र धेरै मान्छेलाई असर गर्ने समाचार (जस्तै: ब्याजदर, बजेट, ठूला सरकारी निर्णय) लाई पहिलो ५ नम्बरमा राख। कम महत्वपूर्णलाई अन्त्यतिर राख।
+    २. हरेक समाचारमा अङ्क वा तथ्याङ्क अनिवार्य हुनुपर्छ। 
+    ३. स्क्रिप्टको ढाँचा: "[नम्बर] . . . [हेडलाइन] . . . [१-२ वाक्यको थप तथ्य]"।
+    ४. बोल्दा एकदमै नेचुरल सुनियोस् भन्नका लागि अल्पविराम (,) र पूर्णविराम (.) को सही प्रयोग गर।
     
     मलाई यो 'json' मा उत्तर देउ:
     {{
-      "intro": "नमस्ते, आजका १३ मुख्य आर्थिक समाचारहरूको साँझको बुलेटिनमा स्वागत छ।",
+      "intro": "नमस्ते, आजका १३ मुख्य आर्थिक खबरहरूको प्राथमिकतासहितको बुलेटिनमा स्वागत छ।",
       "bulletin": [
-        {{ "num": "१", "headline": "हेडलाइन यहाँ", "details": "तथ्यगत जानकारी यहाँ" }}
+        {{ "num": "१", "headline": "सबैभन्दा महत्वपूर्ण हेडलाइन", "details": "तथ्यगत जानकारी" }},
+        ... १३ सम्म ...
       ],
-      "outro": "आजका मुख्य आर्थिक तथ्याङ्कहरू यति नै। भोलि फेरि भेटौँला, नमस्कार।"
+      "outro": "आजका लागि मुख्य आर्थिक खबर यति नै। भोलि फेरि भेटौँला, नमस्कार।"
     }}
     RAW DATA: {news_data}
     """
@@ -84,33 +86,30 @@ async def run_automated_bulletin():
         img = Image.new('RGB', (1080, 1920), color=(15, 15, 15))
         draw = ImageDraw.Draw(img)
         try:
-            f_n = ImageFont.truetype(font_path, 100) # Number font
-            f_h = ImageFont.truetype(font_path, 80)  # Headline font
-            f_d = ImageFont.truetype(font_path, 45)  # Details font
+            f_n = ImageFont.truetype(font_path, 100) # Number
+            f_h = ImageFont.truetype(font_path, 80)  # Headline
+            f_d = ImageFont.truetype(font_path, 45)  # Details
             
-            # नम्बर लेख्ने (Top left)
             draw.text((80, 700), f"{num}.", font=f_n, fill=(255, 255, 0))
             
-            # हेडलाइन (Yellow)
             h_lines = textwrap.wrap(headline, width=22)
             y = 820
             for line in h_lines[:3]:
                 draw.text((80, y), line, font=f_h, fill=(255, 255, 0))
                 y += 110
             
-            # विवरण (White)
             d_lines = textwrap.wrap(details, width=42)
             y += 40
             for line in d_lines[:4]:
                 draw.text((80, y), line, font=f_d, fill=(230, 230, 230))
                 y += 65
                 
-            draw.text((380, 1750), "ECONOMICS BULLETIN", font=f_d, fill=(80, 80, 80))
+            draw.text((380, 1750), "DAILY ECONOMICS BULLETIN", font=f_d, fill=(80, 80, 80))
         except: pass
         img.save(filename)
 
-    # ४. सिङ्क गरिएको अडियो-भिजुअल निर्माण (With Numbers and Pauses)
-    print("🎙️ प्रोफेसनल अडियो सिर्जना र सिङ्क हुँदैछ...")
+    # ४. सिङ्क गरिएको अडियो-भिजुअल निर्माण (Priority Flow)
+    print("🎙️ अडियो सिर्जना र प्राथमिकता अनुसार सिङ्क हुँदैछ...")
     
     # इन्ट्रो
     await edge_tts.Communicate(data['intro'], "ne-NP-SagarNeural", rate="+7%", pitch="-5Hz").save("intro.mp3")
@@ -118,10 +117,9 @@ async def run_automated_bulletin():
     final_clips.append(ImageClip("intro.jpg").set_duration(AudioFileClip("intro.mp3").duration).set_audio(AudioFileClip("intro.mp3")))
 
     for i, item in enumerate(data['bulletin']):
-        # नम्बर ... हेडलाइन ... सानो पज ... थप जानकारी
+        # [नम्बर] ... [हेडलाइन] ... [पज] ... [जानकारी]
         speech_text = f"{item['num']}. . . {item['headline']}. . . {item['details']}"
         v_file = f"v_{i}.mp3"
-        # सगरको आवाजलाई अझै नेचुरल बनाउन रेट अलि कम गरिएको छ
         await edge_tts.Communicate(speech_text, "ne-NP-SagarNeural", rate="+8%", pitch="-5Hz").save(v_file)
         
         a_clip = AudioFileClip(v_file)
@@ -137,13 +135,10 @@ async def run_automated_bulletin():
     final_clips.append(ImageClip("outro.jpg").set_duration(AudioFileClip("outro.mp3").duration).set_audio(AudioFileClip("outro.mp3")))
 
     # ६. एसेम्बल र साइज नियन्त्रण
-    print("🎬 अन्तिम भिडियो निर्माण र कम्प्रेसन हुँदैछ...")
     video = concatenate_videoclips(final_clips, method="compose")
     output_file = "economics_final.mp4"
-    
     video.write_videofile(output_file, fps=24, codec="libx264", audio_codec="aac",
-                        bitrate="1500k", 
-                        ffmpeg_params=["-pix_fmt", "yuv420p", "-crf", "28"])
+                        bitrate="1500k", ffmpeg_params=["-pix_fmt", "yuv420p", "-crf", "28"])
 
     send_video_email(output_file, today)
 
@@ -151,7 +146,7 @@ def send_video_email(filepath, date):
     msg = MIMEMultipart()
     msg['From'] = SENDER
     msg['To'] = SENDER
-    msg['Subject'] = f"Daily Economics Video - {date}"
+    msg['Subject'] = f"Economics Daily Bulletin - {date}"
     with open(filepath, "rb") as f:
         part = MIMEBase('application', 'octet-stream')
         part.set_payload(f.read())
