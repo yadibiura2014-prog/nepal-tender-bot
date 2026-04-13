@@ -2,7 +2,7 @@ import os, requests, json, time, asyncio, textwrap
 from bs4 import BeautifulSoup
 from PIL import Image, ImageDraw, ImageFont
 
-# Pillow र MoviePy बीचको प्रविधिक समस्या समाधान गर्ने लाइन
+# Compatibility fix
 if not hasattr(Image, 'ANTIALIAS'):
     Image.ANTIALIAS = Image.LANCZOS
 
@@ -14,16 +14,16 @@ from email.mime.base import MIMEBase
 from email import encoders
 from datetime import datetime
 
-# --- GitHub Secrets बाट कुञ्जीहरू तान्ने ---
+# --- Secrets ---
 GEMINI_KEY = os.getenv("GEMINI_API_KEY")
 SENDER = os.getenv("EMAIL_SENDER")
 PASSWORD = os.getenv("EMAIL_PASSWORD")
 
 async def run_automated_bulletin():
     today = datetime.now().strftime("%Y-%m-%d")
-    print(f"🚀 Economics Bulletin Started for {today}...")
+    print(f"🚀 Pure Economics Bulletin Process Started for {today}...")
 
-    # १. ८ वटा मुख्य पोर्टलबाट ताजा समाचार संकलन
+    # १. न्युज संकलन (Focus on Business/Economy sections only)
     combined_news = []
     sources = [
         "https://ekantipur.com/business", "https://kathmandupost.com/money",
@@ -37,20 +37,33 @@ async def run_automated_bulletin():
             r = requests.get(u, headers=headers, timeout=10)
             if r.status_code == 200:
                 soup = BeautifulSoup(r.text, 'html.parser')
-                for item in soup.find_all(['h1', 'h2', 'h3'])[:5]:
+                for item in soup.find_all(['h1', 'h2', 'h3'])[:8]:
                     title = item.get_text().strip()
-                    if len(title) > 25: combined_news.append(title)
+                    p = item.find_next('p')
+                    snippet = p.get_text().strip() if p else ""
+                    if len(title) > 20: combined_news.append(f"Title: {title} | Snippet: {snippet}")
         except: pass
 
     news_data = "\n".join(list(set(combined_news)))
 
-    # २. एआई विश्लेषण (PhD Level + १३ समाचार)
+    # २. एआई विश्लेषण (Strict Economics + Factual + Numbered Format)
     prompt = f"""
-    तिमी एक प्रतिष्ठित PhD Economic Analyst हौ। आजको १३ मुख्य समाचार छान। 
-    नियम: १ कडा हेडलाइन (अङ्क अनिवार्य) + १-२ वाक्यको थप तथ्य (Relevant facts)। 
-    भाषा: शुद्ध नेपाली। भिडियो ९० सेकेन्डको बनाउनु पर्ने भएकाले वाक्यहरु छोटा र कडा बनाऊ।
-    मलाई यो 'json' मा उत्तर देउ: {{'intro': '...', 'bulletin': [{{'headline': '...', 'details': '...'}}], 'outro': '...'}}
-    DATA: {news_data}
+    तिमी एक प्रतिष्ठित PhD Economic Analyst हौ। आजको १३ वटा मुख्य 'आर्थिक समाचार' (Economics News) मात्र छान। 
+    नियमहरू:
+    १. राजनीतिक वा अन्य समाचार पूर्णतया निषेध छ। मात्र बैंक, सेयर, व्यापार र बजेट जस्ता आर्थिक विषय छान।
+    २. हरेक समाचारमा अङ्क वा तथ्याङ्क (Data/Numbers) अनिवार्य हुनुपर्छ।
+    ३. स्क्रिप्टको ढाँचा: "[नम्बर] . . . [हेडलाइन] . . . [१-२ वाक्यको तथ्यगत थप जानकारी]"।
+    ४. बोल्दा नेचुरल सुनियोस् भन्नका लागि सही ठाउँमा अल्पविराम (,) र पूर्णविराम (.) को प्रयोग गर।
+    
+    मलाई यो 'json' मा उत्तर देउ:
+    {{
+      "intro": "नमस्ते, आजका १३ मुख्य आर्थिक समाचारहरूको साँझको बुलेटिनमा स्वागत छ।",
+      "bulletin": [
+        {{ "num": "१", "headline": "हेडलाइन यहाँ", "details": "तथ्यगत जानकारी यहाँ" }}
+      ],
+      "outro": "आजका मुख्य आर्थिक तथ्याङ्कहरू यति नै। भोलि फेरि भेटौँला, नमस्कार।"
+    }}
+    RAW DATA: {news_data}
     """
     
     list_url = f"https://generativelanguage.googleapis.com/v1beta/models?key={GEMINI_KEY}"
@@ -62,67 +75,77 @@ async def run_automated_bulletin():
                         json={"contents": [{"parts": [{"text": prompt}]}], "generationConfig": {"response_mime_type": "application/json"}})
     data = json.loads(res.json()['candidates'][0]['content']['parts'][0]['text'])
 
-    # ३. भिडियो र फन्ट सेटअप
+    # ३. भिडियो निर्माण र फन्ट सेटअप
     os.system("wget -O font.ttf https://github.com/google/fonts/raw/main/ofl/hind/Hind-Bold.ttf")
     font_path = "font.ttf"
     final_clips = []
 
-    def make_pro_card(headline, details, filename):
-        img = Image.new('RGB', (1080, 1920), color=(12, 12, 12))
+    def make_economics_card(num, headline, details, filename):
+        img = Image.new('RGB', (1080, 1920), color=(15, 15, 15))
         draw = ImageDraw.Draw(img)
         try:
-            f_h = ImageFont.truetype(font_path, 80)
-            f_d = ImageFont.truetype(font_path, 45)
-            # हेडलाइन र्‍यापिङ (Headline Wrap)
+            f_n = ImageFont.truetype(font_path, 100) # Number font
+            f_h = ImageFont.truetype(font_path, 80)  # Headline font
+            f_d = ImageFont.truetype(font_path, 45)  # Details font
+            
+            # नम्बर लेख्ने (Top left)
+            draw.text((80, 700), f"{num}.", font=f_n, fill=(255, 255, 0))
+            
+            # हेडलाइन (Yellow)
             h_lines = textwrap.wrap(headline, width=22)
-            y = 800
+            y = 820
             for line in h_lines[:3]:
-                draw.text((80, y), line, font=f_h, fill=(255, 255, 0)) # पहेलो हेडलाइन
+                draw.text((80, y), line, font=f_h, fill=(255, 255, 0))
                 y += 110
-            # विवरण र्‍यापिङ (Details Wrap)
+            
+            # विवरण (White)
             d_lines = textwrap.wrap(details, width=42)
             y += 40
             for line in d_lines[:4]:
-                draw.text((80, y), line, font=f_d, fill=(230, 230, 230)) # सेतो विवरण
+                draw.text((80, y), line, font=f_d, fill=(230, 230, 230))
                 y += 65
-            draw.text((380, 1750), "DAILY ECONOMICS BULLETIN", font=f_d, fill=(80, 80, 80))
+                
+            draw.text((380, 1750), "ECONOMICS BULLETIN", font=f_d, fill=(80, 80, 80))
         except: pass
         img.save(filename)
 
-    # ४. सिङ्क गरिएको अडियो-भिजुअल निर्माण
+    # ४. सिङ्क गरिएको अडियो-भिजुअल निर्माण (With Numbers and Pauses)
+    print("🎙️ प्रोफेसनल अडियो सिर्जना र सिङ्क हुँदैछ...")
+    
     # इन्ट्रो
     await edge_tts.Communicate(data['intro'], "ne-NP-SagarNeural", rate="+7%", pitch="-5Hz").save("intro.mp3")
-    make_pro_card("इकोनोमिक्स बुलेटिन", "आजका मुख्य १३ समाचारहरू", "intro.jpg")
+    make_economics_card("0", "Economics Bulletin", "आजका १३ मुख्य आर्थिक खबरहरू", "intro.jpg")
     final_clips.append(ImageClip("intro.jpg").set_duration(AudioFileClip("intro.mp3").duration).set_audio(AudioFileClip("intro.mp3")))
 
-    # १३ वटा समाचार
     for i, item in enumerate(data['bulletin']):
-        text = f"{item['headline']}. . . {item['details']}" # . . . ले एआईलाई थोरै रोकिन सिकाउँछ
+        # नम्बर ... हेडलाइन ... सानो पज ... थप जानकारी
+        speech_text = f"{item['num']}. . . {item['headline']}. . . {item['details']}"
         v_file = f"v_{i}.mp3"
-        await edge_tts.Communicate(text, "ne-NP-SagarNeural", rate="+10%", pitch="-5Hz").save(v_file)
+        # सगरको आवाजलाई अझै नेचुरल बनाउन रेट अलि कम गरिएको छ
+        await edge_tts.Communicate(speech_text, "ne-NP-SagarNeural", rate="+8%", pitch="-5Hz").save(v_file)
         
         a_clip = AudioFileClip(v_file)
         img_file = f"f_{i}.jpg"
-        make_pro_card(item['headline'], item['details'], img_file)
+        make_economics_card(item['num'], item['headline'], item['details'], img_file)
         
         clip = ImageClip(img_file).set_duration(a_clip.duration).set_audio(a_clip).resize(lambda t: 1 + 0.02 * t)
         final_clips.append(clip)
 
-    # ५. अन्तिम भिडियो निर्माण र कम्प्रेसन (साइज घटाउने)
-    print("🎬 भिडियो एसेम्बल र कम्प्रेसन हुँदैछ...")
+    # ५. आउट्रो
+    await edge_tts.Communicate(data['outro'], "ne-NP-SagarNeural", rate="+7%").save("outro.mp3")
+    make_economics_card("✓", "धन्यवाद", "हामीलाई पछ्याउँदै गर्नुहोला", "outro.jpg")
+    final_clips.append(ImageClip("outro.jpg").set_duration(AudioFileClip("outro.mp3").duration).set_audio(AudioFileClip("outro.mp3")))
+
+    # ६. एसेम्बल र साइज नियन्त्रण
+    print("🎬 अन्तिम भिडियो निर्माण र कम्प्रेसन हुँदैछ...")
     video = concatenate_videoclips(final_clips, method="compose")
     output_file = "economics_final.mp4"
     
     video.write_videofile(output_file, fps=24, codec="libx264", audio_codec="aac",
-                        bitrate="1500k", # भिडियो साइज सानो बनाउन
+                        bitrate="1500k", 
                         ffmpeg_params=["-pix_fmt", "yuv420p", "-crf", "28"])
 
-    # ६. ईमेल पठाउने
-    try:
-        send_video_email(output_file, today)
-        print("✅ ईमेल सफलतापूर्वक पठाइयो।")
-    except Exception as e:
-        print(f"❌ ईमेल पठाउन सकिएन: {e}")
+    send_video_email(output_file, today)
 
 def send_video_email(filepath, date):
     msg = MIMEMultipart()
@@ -133,7 +156,7 @@ def send_video_email(filepath, date):
         part = MIMEBase('application', 'octet-stream')
         part.set_payload(f.read())
         encoders.encode_base64(part)
-        part.add_header('Content-Disposition', f"attachment; filename= {filepath}")
+        part.add_header('Content-Disposition', f"attachment; filename= economics_video.mp4")
         msg.attach(part)
     server = smtplib.SMTP('smtp.gmail.com', 587)
     server.starttls()
