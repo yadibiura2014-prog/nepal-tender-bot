@@ -9,20 +9,30 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+      
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
+          
       - name: Install Tools
         run: |
           sudo apt update
           sudo apt install ffmpeg -y
-          pip install requests beautifulsoup4 edge-tts
-          pip install Pillow==9.5.0 moviepy==1.0.3
+          # Pillow ९.५.० हाल्दा मात्र पुरानो एरर हट्छ
+          pip install Pillow==9.5.0 moviepy==1.0.3 requests beautifulsoup4 edge-tts
+          
       - name: Run Video Bot
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          PEXELS_KEY: ${{ secrets.PEXELS_KEY }}
           EMAIL_SENDER: ${{ secrets.EMAIL_SENDER }}
           EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
         run: python economics_video.py
+        
+      # ब्याकअप: ईमेल फेल भए पनि यहाँबाट भिडियो डाउनलोड गर्न मिल्छ
+      - name: Upload Video Artifact
+        if: always() # ईमेल फेल भए पनि यो चल्छ
+        uses: actions/upload-artifact@v4
+        with:
+          name: daily-economics-video
+          path: economics_final.mp4
