@@ -21,16 +21,11 @@ PASSWORD = os.getenv("EMAIL_PASSWORD")
 
 async def run_automated_bulletin():
     today = datetime.now().strftime("%Y-%m-%d")
-    print(f"🚀 Economics Bulletin Started for {today}...")
+    print(f"🚀 Economics Bulletin Process Started for {today}...")
 
-    # १. न्युज संकलन (Focus on Business/Economy)
+    # १. न्युज संकलन
     combined_news = []
-    sources = [
-        "https://ekantipur.com/business", "https://kathmandupost.com/money",
-        "https://setopati.com/kinmel", "https://ratopati.com/category/economy",
-        "https://baarakhari.com/category/business", "https://www.sharesansar.com/category/latest-news",
-        "https://www.nayapatrikadaily.com/category/11", "https://nagariknews.nagariknetwork.com/economy"
-    ]
+    sources = ["https://ekantipur.com/business", "https://kathmandupost.com/money", "https://setopati.com/kinmel", "https://ratopati.com/category/economy", "https://baarakhari.com/category/business", "https://www.sharesansar.com/category/latest-news", "https://www.nayapatrikadaily.com/category/11", "https://nagariknews.nagariknetwork.com/economy"]
     headers = {'User-Agent': 'Mozilla/5.0'}
     for u in sources:
         try:
@@ -46,26 +41,23 @@ async def run_automated_bulletin():
 
     news_data = "\n".join(list(set(combined_news)))
 
-    # २. एआई विश्लेषण (Ranking & Importance Logic)
+    # २. एआई विश्लेषण (Strict Intro + Priority Ranking)
     prompt = f"""
     तिमी एक प्रतिष्ठित PhD Economic Analyst हौ। आजको १३ मुख्य 'आर्थिक समाचार' छान। 
     
-    नियमहरू:
-    १. प्राथमिकता (Priority): सबैभन्दा महत्वपूर्ण र धेरै मान्छेलाई असर गर्ने समाचार (जस्तै: ब्याजदर, बजेट, ठूला सरकारी निर्णय) लाई पहिलो ५ नम्बरमा राख। कम महत्वपूर्णलाई अन्त्यतिर राख।
-    २. हरेक समाचारमा अङ्क वा तथ्याङ्क अनिवार्य हुनुपर्छ। 
-    ३. स्क्रिप्टको ढाँचा: "[नम्बर] . . . [हेडलाइन] . . . [१-२ वाक्यको थप तथ्य]"।
-    ४. बोल्दा एकदमै नेचुरल सुनियोस् भन्नका लागि अल्पविराम (,) र पूर्णविराम (.) को सही प्रयोग गर।
+    कार्यहरू:
+    १. प्राथमिकता: सबैभन्दा महत्वपूर्ण समाचार (ब्याजदर, बजेट, ठूला निर्णय) लाई सुरुमा राख।
+    २. इन्ट्रो (Intro): "नमस्ते, आजका प्रमुख आर्थिक समाचारहरूमा स्वागत छ।" (अनिवार्य यही लेख्नु)।
+    ३. हरेक समाचारमा अङ्क र तथ्य अनिवार्य हुनुपर्छ।
+    ४. बोल्दा नेचुरल सुनियोस् भन्नका लागि सही ठाउँमा अल्पविराम (,) र पूर्णविराम (.) को प्रयोग गर।
     
     मलाई यो 'json' मा उत्तर देउ:
     {{
-      "intro": "नमस्ते, आजका १३ मुख्य आर्थिक खबरहरूको प्राथमिकतासहितको बुलेटिनमा स्वागत छ।",
-      "bulletin": [
-        {{ "num": "१", "headline": "सबैभन्दा महत्वपूर्ण हेडलाइन", "details": "तथ्यगत जानकारी" }},
-        ... १३ सम्म ...
-      ],
+      "intro": "नमस्ते, आजका प्रमुख आर्थिक समाचारहरूमा स्वागत छ।",
+      "bulletin": [ {{ "num": "१", "headline": "हेडलाइन", "details": "तथ्यगत जानकारी" }} ],
       "outro": "आजका लागि मुख्य आर्थिक खबर यति नै। भोलि फेरि भेटौँला, नमस्कार।"
     }}
-    RAW DATA: {news_data}
+    DATA: {news_data}
     """
     
     list_url = f"https://generativelanguage.googleapis.com/v1beta/models?key={GEMINI_KEY}"
@@ -86,38 +78,27 @@ async def run_automated_bulletin():
         img = Image.new('RGB', (1080, 1920), color=(15, 15, 15))
         draw = ImageDraw.Draw(img)
         try:
-            f_n = ImageFont.truetype(font_path, 100) # Number
-            f_h = ImageFont.truetype(font_path, 80)  # Headline
-            f_d = ImageFont.truetype(font_path, 45)  # Details
-            
+            f_n = ImageFont.truetype(font_path, 100); f_h = ImageFont.truetype(font_path, 80); f_d = ImageFont.truetype(font_path, 45)
             draw.text((80, 700), f"{num}.", font=f_n, fill=(255, 255, 0))
-            
             h_lines = textwrap.wrap(headline, width=22)
             y = 820
             for line in h_lines[:3]:
-                draw.text((80, y), line, font=f_h, fill=(255, 255, 0))
-                y += 110
-            
-            d_lines = textwrap.wrap(details, width=42)
-            y += 40
+                draw.text((80, y), line, font=f_h, fill=(255, 255, 0)); y += 110
+            d_lines = textwrap.wrap(details, width=42); y += 40
             for line in d_lines[:4]:
-                draw.text((80, y), line, font=f_d, fill=(230, 230, 230))
-                y += 65
-                
+                draw.text((80, y), line, font=f_d, fill=(230, 230, 230)); y += 65
             draw.text((380, 1750), "DAILY ECONOMICS BULLETIN", font=f_d, fill=(80, 80, 80))
         except: pass
         img.save(filename)
 
-    # ४. सिङ्क गरिएको अडियो-भिजुअल निर्माण (Priority Flow)
-    print("🎙️ अडियो सिर्जना र प्राथमिकता अनुसार सिङ्क हुँदैछ...")
-    
+    # ४. सिङ्क गरिएको अडियो-भिजुअल निर्माण
     # इन्ट्रो
     await edge_tts.Communicate(data['intro'], "ne-NP-SagarNeural", rate="+7%", pitch="-5Hz").save("intro.mp3")
     make_economics_card("0", "Economics Bulletin", "आजका १३ मुख्य आर्थिक खबरहरू", "intro.jpg")
     final_clips.append(ImageClip("intro.jpg").set_duration(AudioFileClip("intro.mp3").duration).set_audio(AudioFileClip("intro.mp3")))
 
     for i, item in enumerate(data['bulletin']):
-        # [नम्बर] ... [हेडलाइन] ... [पज] ... [जानकारी]
+        # नम्बर ... [हेडलाइन] ... [पाउज] ... [विवरण]
         speech_text = f"{item['num']}. . . {item['headline']}. . . {item['details']}"
         v_file = f"v_{i}.mp3"
         await edge_tts.Communicate(speech_text, "ne-NP-SagarNeural", rate="+8%", pitch="-5Hz").save(v_file)
@@ -134,11 +115,10 @@ async def run_automated_bulletin():
     make_economics_card("✓", "धन्यवाद", "हामीलाई पछ्याउँदै गर्नुहोला", "outro.jpg")
     final_clips.append(ImageClip("outro.jpg").set_duration(AudioFileClip("outro.mp3").duration).set_audio(AudioFileClip("outro.mp3")))
 
-    # ६. एसेम्बल र साइज नियन्त्रण
+    # ६. एसेम्बल र सेभ
     video = concatenate_videoclips(final_clips, method="compose")
     output_file = "economics_final.mp4"
-    video.write_videofile(output_file, fps=24, codec="libx264", audio_codec="aac",
-                        bitrate="1500k", ffmpeg_params=["-pix_fmt", "yuv420p", "-crf", "28"])
+    video.write_videofile(output_file, fps=24, codec="libx264", audio_codec="aac", bitrate="1500k", ffmpeg_params=["-pix_fmt", "yuv420p", "-crf", "28"])
 
     send_video_email(output_file, today)
 
