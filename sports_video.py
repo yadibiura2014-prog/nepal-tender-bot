@@ -1,4 +1,4 @@
-import os, requests, json, time, asyncio, textwrap
+import os, requests, json, time, asyncio, textwrap, re
 from bs4 import BeautifulSoup
 from PIL import Image, ImageDraw, ImageFont
 
@@ -16,35 +16,46 @@ from datetime import datetime
 
 # --- Secrets ---
 GEMINI_KEY = os.getenv("GEMINI_API_KEY")
-PEXELS_KEY = os.getenv("PEXELS_KEY")
 SENDER = os.getenv("EMAIL_SENDER")
 PASSWORD = os.getenv("EMAIL_PASSWORD")
 
+# डकडकगोबाट वास्तविक फोटो खोज्ने फङ्सन (No Key Needed)
+def get_real_image(query):
+    try:
+        url = "https://duckduckgo.com/assets/logo_homepage.normal.v108.svg" # Just to check connection
+        # समाचारको हेडलाइनबाट विशिष्ट फोटो खोज्ने
+        search_url = f"https://duckduckgo.com/i.js?q={query}&o=json"
+        headers = {'User-Agent': 'Mozilla/5.0'}
+        # हामी यहाँ एउटा सिम्पल तरिकाले पिक्सल्स र एआईको किवर्ड मिलाएर फोटो लिन्छौँ
+        # किनभने सिधै गुगल स्क्र्याप गर्दा गिटहबले ब्लक गर्न सक्छ। 
+        # त्यसैले हामी एआईलाई 'सान्दर्भिक' किवर्ड निकाल्न भन्छौँ।
+        return None
+    except: return None
+
 async def run_sports_bulletin():
     today = datetime.now().strftime("%Y-%m-%d")
-    print(f"⚽ Sports Bulletin Started for {today}...")
+    print(f"⚽ Real Sports Bulletin Process Started for {today}...")
 
-    # १. न्युज संकलन (Major Sports Portals)
+    # १. न्युज संकलन
     combined_news = []
-    sources = ["https://ekantipur.com/sports", "https://ratopati.com/category/sport", "https://setopati.com/khel", "https://baarakhari.com/category/sports", "https://www.hamrokhelkud.com/", "https://kathmandupost.com/sports"]
+    sources = ["https://ekantipur.com/sports", "https://ratopati.com/category/sport", "https://setopati.com/khel", "https://www.hamrokhelkud.com/"]
     headers = {'User-Agent': 'Mozilla/5.0'}
     for u in sources:
         try:
             r = requests.get(u, headers=headers, timeout=10)
-            if r.status_code == 200:
-                soup = BeautifulSoup(r.text, 'html.parser')
-                for item in soup.find_all(['h1', 'h2', 'h3'])[:6]:
-                    title = item.get_text().strip()
-                    if len(title) > 20: combined_news.append(title)
+            soup = BeautifulSoup(r.text, 'html.parser')
+            for item in soup.find_all(['h1', 'h2', 'h3'])[:8]:
+                title = item.get_text().strip()
+                if len(title) > 25: combined_news.append(title)
         except: pass
 
     news_data = "\n".join(list(set(combined_news)))
 
-    # २. एआई विश्लेषण (Only 5 Headlines + Fast Facts)
+    # २. एआई विश्लेषण (Focus on Specific Keywords for Real Images)
     prompt = f"""
-    तिमी एक प्रतिष्ठित स्पोर्ट्स एनालिस्ट हौ। आजका मुख्य ५ वटा 'खेलकुद समाचार' छान।
-    नियम: १ हेडलाइन + १-२ वाक्यको थप तथ्य। कुल भिडियो १ मिनेट भित्र सकिनुपर्छ। 
-    नेपालको खेललाई प्राथमिकता देउ। अङ्क र नतिजा अनिवार्य छ।
+    तिमी एक प्रतिष्ठित स्पोर्ट्स एनालिस्ट हौ। आजका मुख्य ५ समाचार छान।
+    नियम: १ हेडलाइन + १-२ वाक्यको थप तथ्य। कुल १ मिनेटको भिडियो। 
+    फोटोको लागि: समाचारको मुख्य पात्र वा खेलको नाम जोडिएको 'Specific' किवर्ड देउ (जस्तै: "Nepal Cricket Team celebrating", "Nepali Footballer Anjan Bista").
     मलाई 'json' मा उत्तर देउ: {{'intro': '...', 'bulletin': [{{'num': '१', 'headline': '...', 'details': '...', 'keyword': '...'}}], 'outro': '...'}}
     DATA: {news_data}
     """
@@ -64,11 +75,13 @@ async def run_sports_bulletin():
     final_clips = []
 
     def make_sports_card(num, headline, details, img_url, filename):
-        img_raw = Image.open(requests.get(img_url, stream=True).raw).resize((1080, 1920))
+        # वास्तविक फोटो डाउनलोड गर्ने
+        r = requests.get(img_url, stream=True)
+        img_raw = Image.open(r.raw).convert('RGB').resize((1080, 1920))
         draw = ImageDraw.Draw(img_raw)
         try:
             f_n = ImageFont.truetype(font_path, 110); f_h = ImageFont.truetype(font_path, 80); f_d = ImageFont.truetype(font_path, 45); f_b = ImageFont.truetype(font_path, 40)
-            draw.rectangle([0, 1300, 1080, 1750], fill=(0, 0, 0, 200))
+            draw.rectangle([0, 1300, 1080, 1750], fill=(0, 0, 0, 220)) # अझ गाढा पट्टी
             draw.text((60, 1320), f"{num}.", font=f_n, fill=(255, 255, 0))
             h_lines = textwrap.wrap(headline, width=22)
             y = 1440
@@ -81,12 +94,11 @@ async def run_sports_bulletin():
         except: pass
         img_raw.save(filename)
 
-    # ४. अडियो र सिन निर्माण (१ मिनेट टार्गेट)
-    # इन्ट्रो
-    intro_txt = "नमस्ते, दैनिक खेलकुद बुलेटिनमा स्वागत छ।"
-    await edge_tts.Communicate(intro_txt, "ne-NP-SagarNeural", rate="+12%", pitch="-2Hz").save("in.mp3")
-    r_in = requests.get(f"https://api.pexels.com/v1/search?query=football stadium&per_page=1&orientation=portrait", headers={"Authorization": PEXELS_KEY}).json()
-    make_sports_card("0", "Khelkud Samachaar", "आजका ५ मुख्य समाचार", r_in['photos'][0]['src']['large2x'], "in.jpg")
+    # ४. अडियो र सिन निर्माण (No Fade/Transitions)
+    await edge_tts.Communicate(data['intro'], "ne-NP-SagarNeural", rate="+12%", pitch="-2Hz").save("in.mp3")
+    # इन्ट्रोको लागि एउटा राम्रो फोटो
+    intro_img_url = "https://images.pexels.com/photos/399187/pexels-photo-399187.jpeg?auto=compress&cs=tinysrgb&w=1080&h=1920&dpr=1"
+    make_sports_card("0", "Khelkud Samachaar", "आजका ५ मुख्य समाचार", intro_img_url, "in.jpg")
     final_clips.append(ImageClip("in.jpg").set_duration(AudioFileClip("in.mp3").duration).set_audio(AudioFileClip("in.mp3")))
 
     for i, item in enumerate(data['bulletin']):
@@ -95,21 +107,28 @@ async def run_sports_bulletin():
         await edge_tts.Communicate(text, "ne-NP-SagarNeural", rate="+15%", pitch="-2Hz").save(v_file)
         a_clip = AudioFileClip(v_file)
         
-        kw = f"sports {item['keyword']}"
-        r_img = requests.get(f"https://api.pexels.com/v1/search?query={kw}&per_page=1&orientation=portrait", headers={"Authorization": PEXELS_KEY}).json()
-        img_url = r_img['photos'][0]['src']['large2x'] if 'photos' in r_img and len(r_img['photos']) > 0 else r_in['photos'][0]['src']['large2x']
+        # Pexels मा विशिष्ट कीवर्डबाट फोटो खोज्ने (नेपालको फोटो नभए साउथ एसियाली खोज्ने)
+        kw = item['keyword']
+        r_img = requests.get(f"https://api.pexels.com/v1/search?query={kw}&per_page=5&orientation=portrait", headers={"Authorization": os.getenv("PEXELS_KEY")}).json()
+        
+        # यदि पिक्सल्समा फोटो भेटिएन भने एउटा स्ट्यान्डर्ड स्पोर्ट्स ब्याकग्राउन्ड लिने
+        img_url = r_img['photos'][0]['src']['large2x'] if 'photos' in r_img and len(r_img['photos']) > 0 else intro_img_url
         
         img_file = f"f_{i}.jpg"
         make_sports_card(item['num'], item['headline'], item['details'], img_url, img_file)
-        clip = ImageClip(img_file).set_duration(a_clip.duration).set_audio(a_clip).resize(lambda t: 1 + 0.02 * t)
+        
+        # मुख्य सुधार: कुनै पनि resize वा fade इफेक्ट बिना सिधा क्लिप
+        clip = ImageClip(img_file).set_duration(a_clip.duration).set_audio(a_clip)
         final_clips.append(clip)
 
-    # ५. आउट्रो र एसेम्बल
     await edge_tts.Communicate(data['outro'], "ne-NP-SagarNeural", rate="+10%").save("out.mp3")
-    make_sports_card("✓", "धन्यवाद", "हामीलाई फलो गर्नुहोला", r_in['photos'][0]['src']['large2x'], "out.jpg")
+    make_sports_card("✓", "धन्यवाद", "हामीलाई पछ्याउँदै गर्नुहोला", intro_img_url, "out.jpg")
     final_clips.append(ImageClip("out.jpg").set_duration(AudioFileClip("out.mp3").duration).set_audio(AudioFileClip("out.mp3")))
 
-    video = concatenate_videoclips(final_clips, method="compose")
+    # ५. एसेम्बल (No Transitions)
+    print("🎬 भिडियो जोडिँदैछ (Hard Cuts Only)...")
+    # method="chain" ले गर्दा एउटा सिन सकिने बित्तिकै अर्को झ्याप्प आउँछ
+    video = concatenate_videoclips(final_clips, method="chain")
     video.write_videofile("sports_final.mp4", fps=24, codec="libx264", audio_codec="aac", bitrate="1500k", ffmpeg_params=["-pix_fmt", "yuv420p", "-crf", "28"])
     send_video_email("sports_final.mp4", today)
 
