@@ -25,7 +25,7 @@ async def run_automated_bulletin():
 
     # १. न्युज संकलन (सुरुमै हेडलाइन फिल्टर गर्ने ताकी एआईलाई सजिलो होस्)
     headlines_list = []
-    sources = ["https://ekantipur.com/business", "https://kathmandupost.com/money", "https://setopati.com/kinmel", "https://ratopati.com/category/economy", "https://baarakhari.com/category/business", "https://www.sharesansar.com/category/latest-news"]
+    sources = ["https://ekantipur.com/business", "https://setopati.com/kinmel", "https://ratopati.com/category/economy", "https://baarakhari.com/category/business", "https://www.sharesansar.com/category/latest-news"]
     
     headers = {'User-Agent': 'Mozilla/5.0'}
     for u in sources:
