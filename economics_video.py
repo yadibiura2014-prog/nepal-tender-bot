@@ -2,7 +2,7 @@ import os, requests, json, time, asyncio, textwrap
 from bs4 import BeautifulSoup
 from PIL import Image, ImageDraw, ImageFont
 
-# Compatibility fix for Pillow
+# Pillow/MoviePy compatibility fix
 if not hasattr(Image, 'ANTIALIAS'):
     Image.ANTIALIAS = Image.LANCZOS
 
@@ -19,116 +19,129 @@ GEMINI_KEY = os.getenv("GEMINI_API_KEY")
 SENDER = os.getenv("EMAIL_SENDER")
 PASSWORD = os.getenv("EMAIL_PASSWORD")
 
-async def run_stable_bulletin():
+async def run_automated_bulletin():
     today = datetime.now().strftime("%Y-%m-%d")
-    print(f"🚀 Bulletproof Economics Process Started for {today}...")
+    print(f"🚀 Economics Bulletin (Factual Info Only) Started for {today}...")
 
-    # १. न्युज संकलन (Headline Only - Ultra Light)
-    headlines = []
-    sources = ["https://ekantipur.com/business", "https://kathmandupost.com/money", "https://setopati.com/kinmel", "https://www.sharesansar.com/category/latest-news"]
+    # १. न्युज संकलन
+    headlines_list = []
+    sources = ["https://ekantipur.com/business", "https://kathmandupost.com/money", "https://setopati.com/kinmel", "https://ratopati.com/category/economy", "https://baarakhari.com/category/business", "https://www.sharesansar.com/category/latest-news"]
+    
     headers = {'User-Agent': 'Mozilla/5.0'}
     for u in sources:
         try:
             r = requests.get(u, headers=headers, timeout=10)
             if r.status_code == 200:
                 soup = BeautifulSoup(r.text, 'html.parser')
-                for item in soup.find_all(['h1', 'h2', 'h3'])[:5]:
-                    txt = item.get_text().strip()
-                    if len(txt) > 25: headlines.append(txt)
+                for item in soup.find_all(['h1', 'h2', 'h3'])[:7]:
+                    title = item.get_text().strip()
+                    p = item.find_next('p')
+                    snippet = p.get_text().strip() if p else ""
+                    if len(title) > 25: 
+                        headlines_list.append(f"TITLE: {title} | DETAILS: {snippet}")
         except: pass
-    
-    clean_input = "\n".join(list(set(headlines))[:15])
 
-    # २. एआई विश्लेषण (Simpler API Call to avoid 400 error)
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_KEY}"
-    
+    clean_news_input = "\n\n".join(list(set(headlines_list))[:25])
+
+    # २. एआई विश्लेषण (Facts Only - No Analysis)
+    list_url = f"https://generativelanguage.googleapis.com/v1beta/models?key={GEMINI_KEY}"
+    m_res = requests.get(list_url).json()
+    models = [m['name'] for m in m_res.get('models', []) if 'generateContent' in m.get('supportedGenerationMethods', [])]
+    chosen_model = next((m for m in models if "gemini-1.5-flash" in m), models[0])
+
     prompt = f"""
-    तिमी एक Economic Analyst हौ। आजको ६ वटा मुख्य आर्थिक समाचार छान।
-    सुरुमा एउटा कडा 'झड्का' लाग्ने हेडलाइन (Hook) राख। त्यसपछि ६ वटा हेडलाइन (अङ्कसहित) र तथ्य देउ।
-    सबै कुरा शुद्ध नेपालीमा लेख। अङ्ग्रेजी निषेध छ।
-    मलाई यो 'json' ढाँचामा मात्र उत्तर देउ, अरु केही नलेख:
-    {{
-      "hook_h": "हेडलाइन", "hook_d": "विवरण",
-      "bulletin": [ {{"n": "१", "h": "हेडलाइन", "d": "विवरण"}} ],
-      "outro": "धन्यवाद।"
-    }}
-    HEADLINES: {clean_input}
+    तिमी एक प्रतिष्ठित PhD Economic Analyst हौ। आजको ६ वटा मुख्य 'आर्थिक समाचार' छान। 
+    
+    नियमहरू (अनिवार्य):
+    १. भाषा: सबै कुरा शुद्ध र ठेट नेपालीमा हुनुपर्छ। 
+    २. सामग्री: समाचारको आफ्नै विश्लेषण (यसले फाइदा गर्छ, राम्रो हुन्छ जस्ता कुरा) निषेध छ। समाचारसँग सम्बन्धित थप तथ्यगत जानकारी (लागत, स्थान, संस्थाको नाम, वा प्राविधिक डेटा) मात्र देउ।
+    ३. हेडलाइन: अङ्क र तथ्याङ्क अनिवार्य।
+    ४. ढाँचा: [नम्बर] . . [हेडलाइन] . . [१-२ वाक्यको ठोस जानकारी]।
+    ५. इन्ट्रो: 'नमस्ते, आजका प्रमुख आर्थिक समाचारहरूमा स्वागत छ।'
+    
+    मलाई यो 'json' मा उत्तर देउ: {{'intro': '...', 'bulletin': [{{'num': '१', 'headline': '...', 'details': '...'}}], 'outro': '...'}}
+    HEADLINES AND SNIPPETS: {clean_news_input}
     """
-
+    
+    gen_url = f"https://generativelanguage.googleapis.com/v1beta/{chosen_model}:generateContent?key={GEMINI_KEY}"
+    
     data = None
     for attempt in range(5):
         try:
-            response = requests.post(url, json={"contents": [{"parts": [{"text": prompt}]}]}, timeout=30)
-            if response.status_code == 200:
-                # एआईको उत्तरबाट JSON मात्र निकाल्ने (Markdown सफा गर्ने)
-                raw_res = response.json()['candidates'][0]['content']['parts'][0]['text']
-                json_str = raw_res.replace('```json', '').replace('```', '').strip()
-                data = json.loads(json_str)
-                print(f"✅ एआई सफलता! (कोसिस: {attempt+1})")
+            res = requests.post(gen_url, json={"contents": [{"parts": [{"text": prompt}]}], "generationConfig": {"response_mime_type": "application/json"}}, timeout=30)
+            res_json = res.json()
+            if 'candidates' in res_json:
+                data = json.loads(res_json['candidates'][0]['content']['parts'][0]['text'])
                 break
             else:
-                print(f"⚠️ एआई व्यस्त (Error {response.status_code}), फेरि कोसिस गर्दै...")
-                time.sleep(20)
-        except Exception as e:
-            print(f"Error: {e}")
-            time.sleep(20)
+                print(f"⚠️ वेटिङ... ({attempt+1})")
+                time.sleep(25)
+        except: time.sleep(25)
 
     if not data:
-        print("❌ एआईबाट डाटा आएन।")
+        print("❌ एआईले उत्तर दिएन।")
         return
 
-    # ३. फन्ट र भिडियो कार्ड
+    # ३. भिडियो निर्माण र फन्ट
     os.system("wget -O font.ttf https://github.com/google/fonts/raw/main/ofl/hind/Hind-Bold.ttf")
     font_path = "font.ttf"
     final_clips = []
 
-    def make_card(title, desc, num="", is_hook=False):
+    def make_card(num, headline, details, filename, is_intro=False):
         img = Image.new('RGB', (1080, 1920), color=(15, 15, 15))
         draw = ImageDraw.Draw(img)
         try:
-            f_h = ImageFont.truetype(font_path, 90 if is_hook else 75)
-            f_d = ImageFont.truetype(font_path, 45)
-            y = 750 if is_hook else 820
-            h_lines = textwrap.wrap(title, width=22)
-            for line in h_lines[:3]:
-                draw.text((80, y), line, font=f_h, fill=(255, 255, 0)); y += 110
-            d_lines = textwrap.wrap(desc, width=42)
-            y += 40
-            for line in d_lines[:3]:
-                draw.text((80, y), line, font=f_d, fill=(230, 230, 230)); y += 70
-            draw.text((320, 1820), "दैनिक आर्थिक समाचार", font=f_d, fill=(70, 70, 70))
+            f_n = ImageFont.truetype(font_path, 110); f_h = ImageFont.truetype(font_path, 80); f_d = ImageFont.truetype(font_path, 45); f_b = ImageFont.truetype(font_path, 40)
+            if is_intro:
+                draw.text((150, 900), "आर्थिक समाचार", font=f_h, fill=(255, 255, 0))
+                draw.text((250, 1050), "दैनिक आर्थिक बुलेटिन", font=f_d, fill=(200, 200, 200))
+            else:
+                draw.text((80, 700), f"{num}.", font=f_n, fill=(255, 255, 0))
+                h_lines = textwrap.wrap(headline, width=22)
+                y = 820
+                for line in h_lines[:3]:
+                    draw.text((80, y), line, font=f_h, fill=(255, 255, 0)); y += 110
+                d_lines = textwrap.wrap(details, width=42)
+                y += 40
+                for line in d_lines[:4]:
+                    draw.text((80, y), line, font=f_d, fill=(230, 230, 230)); y += 65
+            draw.text((320, 1820), "दैनिक आर्थिक समाचार", font=f_b, fill=(70, 70, 70))
         except: pass
-        img.save("temp.jpg")
-        return ImageClip("temp.jpg")
+        img.save(filename)
 
     # ४. अडियो-भिजुअल सिङ्क
-    # Hook
-    h_audio_file = "h.mp3"
-    await edge_tts.Communicate(f"{data['hook_h']}. . . {data['hook_d']}", "ne-NP-SagarNeural", rate="+10%", pitch="-5Hz").save(h_audio_file)
-    h_audio = AudioFileClip(h_audio_file)
-    final_clips.append(make_card(data['hook_h'], data['hook_d'], is_hook=True).set_duration(h_audio.duration).set_audio(h_audio))
+    await edge_tts.Communicate(data['intro'], "ne-NP-SagarNeural", rate="+7%", pitch="-5Hz").save("intro.mp3")
+    make_card("", "", "", "intro.jpg", is_intro=True)
+    final_clips.append(ImageClip("intro.jpg").set_duration(AudioFileClip("intro.mp3").duration).set_audio(AudioFileClip("intro.mp3")))
 
-    # Bulletin
     for i, item in enumerate(data['bulletin'][:6]):
-        v_txt = f"{item['n']}. . . {item['h']}. . . {item['d']}"
+        print(f"Syncing News {i+1}...")
+        text = f"{item['num']}. . . {item['headline']}. . . {item['details']}"
         v_file = f"v_{i}.mp3"
-        await edge_tts.Communicate(v_txt, "ne-NP-SagarNeural", rate="+10%", pitch="-5Hz").save(v_file)
+        await edge_tts.Communicate(text, "ne-NP-SagarNeural", rate="+9%", pitch="-5Hz").save(v_file)
+        
         a_clip = AudioFileClip(v_file)
-        clip = make_card(item['h'], item['d'], num=item['n']).set_duration(a_clip.duration).set_audio(a_clip)
-        final_clips.append(clip.resize(lambda t: 1 + 0.02 * t))
+        img_file = f"f_{i}.jpg"
+        make_card(item['num'], item['headline'], item['details'], img_file)
+        clip = ImageClip(img_file).set_duration(a_clip.duration).set_audio(a_clip).resize(lambda t: 1 + 0.02 * t)
+        final_clips.append(clip)
 
-    # ५. एक्सपोर्ट
+    await edge_tts.Communicate(data['outro'], "ne-NP-SagarNeural", rate="+7%", pitch="-5Hz").save("outro.mp3")
+    make_card("", "धन्यवाद", "", "outro.jpg", is_intro=True)
+    final_clips.append(ImageClip("outro.jpg").set_duration(AudioFileClip("outro.mp3").duration).set_audio(AudioFileClip("outro.mp3")))
+
+    # ५. एसेम्बल र सेभ
     video = concatenate_videoclips(final_clips, method="compose")
-    output = "economics_final.mp4"
-    video.write_videofile(output, fps=24, codec="libx264", audio_codec="aac", bitrate="1500k", ffmpeg_params=["-pix_fmt", "yuv420p"])
+    output_file = "economics_final.mp4"
+    video.write_videofile(output_file, fps=24, codec="libx264", audio_codec="aac", bitrate="1500k", ffmpeg_params=["-pix_fmt", "yuv420p", "-crf", "28"])
 
-    send_video_email(output, today)
+    send_video_email(output_file, today)
 
 def send_video_email(filepath, date):
-    msg = MIMEMultipart(); msg['From'] = SENDER; msg['To'] = SENDER; msg['Subject'] = f"Economics Daily - {date}"
+    msg = MIMEMultipart(); msg['From'] = SENDER; msg['To'] = SENDER; msg['Subject'] = f"Economics Daily Bulletin - {date}"
     with open(filepath, "rb") as f:
         part = MIMEBase('application', 'octet-stream'); part.set_payload(f.read()); encoders.encode_base64(part); part.add_header('Content-Disposition', f"attachment; filename= economics_video.mp4"); msg.attach(part)
     server = smtplib.SMTP('smtp.gmail.com', 587); server.starttls(); server.login(SENDER, PASSWORD); server.sendmail(SENDER, SENDER, msg.as_string()); server.quit()
 
 if __name__ == "__main__":
-    asyncio.run(run_stable_bulletin())
+    asyncio.run(run_automated_bulletin())
