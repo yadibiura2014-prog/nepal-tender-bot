@@ -1,8 +1,8 @@
-import os, requests, json, time, asyncio, textwrap, re
+import os, requests, json, time, asyncio, textwrap
 from bs4 import BeautifulSoup
 from PIL import Image, ImageDraw, ImageFont
 
-# Compatibility fix
+# Pillow Fix
 if not hasattr(Image, 'ANTIALIAS'):
     Image.ANTIALIAS = Image.LANCZOS
 
@@ -19,14 +19,13 @@ GEMINI_KEY = os.getenv("GEMINI_API_KEY")
 SENDER = os.getenv("EMAIL_SENDER")
 PASSWORD = os.getenv("EMAIL_PASSWORD")
 
-async def run_final_system():
+async def run_final_reset():
     today = datetime.now().strftime("%Y-%m-%d")
-    print(f"🚀 Starting Final Robust Process for {today}...")
+    print(f"🚀 Hard-Reset Economics Process Started for {today}...")
 
     # १. न्युज संकलन (Headline Only)
     headlines = []
-    sources = ["https://ekantipur.com/business", "https://kathmandupost.com/money", "https://setopati.com/kinmel", "https://ratopati.com/category/economy", "https://baarakhari.com/category/business", "https://www.sharesansar.com/category/latest-news"]
-    
+    sources = ["https://ekantipur.com/business", "https://kathmandupost.com/money", "https://setopati.com/kinmel", "https://www.sharesansar.com/category/latest-news"]
     headers = {'User-Agent': 'Mozilla/5.0'}
     for u in sources:
         try:
@@ -35,56 +34,65 @@ async def run_final_system():
                 soup = BeautifulSoup(r.text, 'html.parser')
                 for item in soup.find_all(['h1', 'h2', 'h3'])[:5]:
                     txt = item.get_text().strip()
-                    if len(txt) > 25: headlines.append(txt)
+                    if len(txt) > 30: headlines.append(txt)
         except: pass
     
-    clean_input = "\n".join(list(set(headlines))[:15])
+    clean_news = "\n".join(list(set(headlines))[:12])
 
-    # २. एआई विश्लेषण (Simple Text Response to avoid 400/KeyError)
-    url = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={GEMINI_KEY}"
+    # २. एआई विश्लेषण (With Safety Override)
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_KEY}"
     
     prompt = f"""
-    तिमी एक प्रतिष्ठित Economic Analyst हौ। १५ वटा हेडलाइनबाट ६ वटा मात्र मुख्य समाचार छान। 
-    
+    तिमी एक प्रतिष्ठित Economic Analyst हौ। आजको ६ वटा मुख्य आर्थिक समाचार छान। 
     नियम:
-    १. सुरुमा एउटा कडा 'Hook' हेडलाइन र विवरण लेख।
-    २. त्यसपछि ५ वटा अन्य समाचार लेख। 
-    ३. हरेक समाचार यसरी लेख: "नम्बर: [नम्बर] | हेडलाइन: [हेडलाइन] | विवरण: [१ वाक्यको तथ्य]"
-    ४. सबै कुरा शुद्ध नेपालीमा लेख। अङ्ग्रेजी निषेध छ।
-    
-    HEADLINES: {clean_input}
+    १. पहिलो खबर 'झड्का' दिने हेडलाइन (Hook) हुनुपर्छ।
+    २. सबै कुरा शुद्ध नेपालीमा लेख।
+    ३. हरेक समाचार यो फर्म्याटमा लेख: "HEADLINE: [हेडलाइन] | DETAILS: [१ वाक्यको तथ्य]"
+    HEADLINES: {clean_news}
     """
+
+    # Safety settings लाई हटाउने कमान्ड (BLOCK_NONE)
+    payload = {
+        "contents": [{"parts": [{"text": prompt}]}],
+        "safetySettings": [
+            {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
+        ]
+    }
 
     data_text = ""
     for attempt in range(5):
         try:
-            response = requests.post(url, json={"contents": [{"parts": [{"text": prompt}]}]}, timeout=30)
-            if response.status_code == 200:
-                data_text = response.json()['candidates'][0]['content']['parts'][0]['text']
+            res = requests.post(url, json=payload, timeout=30)
+            res_json = res.json()
+            if res.status_code == 200 and 'candidates' in res_json:
+                data_text = res_json['candidates'][0]['content']['parts'][0]['text']
                 print(f"✅ एआईले सफलतापूर्वक उत्तर दियो!")
                 break
             else:
-                print(f"⚠️ कोसिस गर्दै... {attempt+1}")
+                print(f"⚠️ गुगल एरर मेसेज: {res.text}")
                 time.sleep(20)
-        except: time.sleep(20)
+        except Exception as e:
+            print(f"Error: {e}")
+            time.sleep(20)
 
     if not data_text:
         print("❌ एआईबाट जवाफ आएन।")
         return
 
-    # ३. एआईको उत्तरलाई टुक्रा पार्ने (Parsing)
-    # हामी रेगुलर एक्सप्रेसन प्रयोग गरेर हेडलाइन र विवरण निकाल्छौँ
+    # ३. डाटा प्रोसेसिङ
     scenes = []
-    lines = data_text.split('\n')
-    for line in lines:
-        if '|' in line and 'हेडलाइन' in line:
-            parts = line.split('|')
-            h = parts[1].replace('हेडलाइन:', '').strip()
-            d = parts[2].replace('विवरण:', '').strip()
+    for line in data_text.split('\n'):
+        if '|' in line and 'HEADLINE' in line:
+            p = line.split('|')
+            h = p[0].replace('HEADLINE:', '').strip()
+            d = p[1].replace('DETAILS:', '').strip()
             scenes.append({'h': h, 'd': d})
 
     if not scenes:
-        print("❌ एआईको उत्तर बुझ्न सकिएन।")
+        print("❌ डाटा बुझ्न सकिएन।")
         return
 
     # ४. भिडियो निर्माण
@@ -111,7 +119,7 @@ async def run_final_system():
         return ImageClip("t.jpg")
 
     # ५. अडियो र सिन सिङ्क
-    print("🎙️ आवाज र भिडियो सिङ्क हुँदैछ...")
+    print("🎙️ अडियो र भिडियो सिङ्क हुँदैछ...")
     for i, sc in enumerate(scenes[:6]):
         txt = f"{i+1}. . . {sc['h']}. . . {sc['d']}"
         v_file = f"v_{i}.mp3"
@@ -135,4 +143,4 @@ def send_video_email(filepath, date):
     server = smtplib.SMTP('smtp.gmail.com', 587); server.starttls(); server.login(SENDER, PASSWORD); server.sendmail(SENDER, SENDER, msg.as_string()); server.quit()
 
 if __name__ == "__main__":
-    asyncio.run(run_final_system())
+    asyncio.run(run_final_reset())
