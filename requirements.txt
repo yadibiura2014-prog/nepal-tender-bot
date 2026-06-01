@@ -1,0 +1,3 @@
+moviepy
+edge-tts
+python-docx
